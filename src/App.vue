@@ -5,7 +5,6 @@
 </template>
 <script>
 import bus from '@/utils/bus';
-import { PolylineTrailLinkMaterialProperty } from '@/utils/line';
 
 export default {
   name: 'BaseMap',
@@ -22,15 +21,27 @@ export default {
     cesiumInit() {
       Cesium.Ion.defaultAccessToken =
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwMDZkYjNmOS1kZjBiLTRjNDktOWUyMS1jNDE4NWM0NTAzN2YiLCJpZCI6MzMxMzAsInNjb3BlcyI6WyJhc3IiLCJnYyJdLCJpYXQiOjE1OTgwNDM2Mjd9.eNJtn8iNyaIfl16r3scqF-jdQzn_JSlygDcXLe2TFwY';
+      let imageryProvider = new Cesium.WebMapTileServiceImageryProvider({
+        url:
+          'http://t0.tianditu.com/img_w/wmts?service=wmts&request=GetTile&version=1.0.0&LAYER=img&tileMatrixSet=w&TileMatrix={TileMatrix}&TileRow={TileRow}&TileCol={TileCol}&style=default&format=tiles&tk=7711a24780452f03bb7c02fba98183b9',
+        layer: 'img4',
+        style: 'default',
+        format: 'tiles',
+        tileMatrixSetID: 'w',
+        credit: new Cesium.Credit('天地图全球影像服务'),
+        show: false
+      });
       const viewerOption = {
         geocoder: false, // 地理位置查询定位控件
         homeButton: false, // 默认相机位置控件
         timeline: false, // 时间滚动条控件
+        infoBox: false, // 默认弹窗
         navigationHelpButton: false, // 默认的相机控制提示控件
         fullscreenButton: false, // 全屏控件
         scene3DOnly: true, // 每个几何实例仅以3D渲染以节省GPU内存
         baseLayerPicker: false, // 底图切换控件
         animation: false, // 控制场景动画的播放速度控件
+        imageryProvider: imageryProvider,
         terrainProvider: new Cesium.createWorldTerrain(), // 世界地形
         contextOptions: {
           webgl: {
@@ -51,30 +62,10 @@ export default {
         // 第一次emit on接收不到？
         // bus.$emit('cesiumReady');
       });
+      this.flyInit();
       this.initCameraEnd();
-      this.loadSatellite();
-    },
-    // 添加天地图注记
-    loadImager() {
-      const viewer = window.viewer;
-      // 天地图
-      // viewer.imageryLayers.addImageryProvider(
-      //   new Cesium.TiandituImageryProvider({
-      //     credit: new Cesium.Credit('http://t0.tianditu.gov.cn/img_w/wmts?'),
-      //     token: '76d35ea95dafb0023ee631a25e260ec4'
-      //   })
-      // );
-      viewer.imageryLayers.addImageryProvider(
-        new Cesium.WebMapTileServiceImageryProvider({
-          url:
-            'https://t0.tianditu.gov.cn/cva_w/wmts?service=wmts&request=GetTile&version=1.0.0&LAYER=cva&tileMatrixSet=w&TileMatrix={TileMatrix}&TileRow={TileRow}&TileCol={TileCol}&style=default&format=tiles&tk=76d35ea95dafb0023ee631a25e260ec4',
-          layer: 'tdtAnnoLayer',
-          style: 'default',
-          format: 'image/jpeg',
-          tileMatrixSetID: 'GoogleMapsCompatible',
-          show: false
-        })
-      );
+      this.addLeftClickEvent();
+      this.loadFeature();
     },
     initCameraEnd() {
       const viewer = window.viewer;
@@ -92,182 +83,95 @@ export default {
       });
     },
     flyInit() {
-      const viewer = window.viewer;
       viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(109.8074934154574, 31.91985964527413, 7500),
+        destination: Cesium.Cartesian3.fromDegrees(111.91218965086307, 37.70432535392143, 6124418.455506831),
         orientation: {
-          heading: 5.928204839875907,
-          pitch: -1.4854982106813184,
-          roll: 6.2770896402646095
+          heading: 8.881784197001252e-16,
+          pitch: -1.5684766455716765,
+          roll: 0
         }
       });
     },
-    loadLine() {
-      let item = viewer.entities.add({
-        name: 'PolylineTrail',
-        polygon: {
-          hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights([
-            50,
-            30,
-            250000,
-            60,
-            30,
-            250000,
-            60,
-            32,
-            250000,
-            50,
-            32,
-            250000
-          ]),
-          width: 15,
-          material: new PolylineTrailLinkMaterialProperty(Cesium.Color.WHITE, 3000, 1)
+    loadFeature() {
+      let source = viewer.dataSources.getByName('fea-custom')[0];
+      if (!source) {
+        source = new Cesium.CustomDataSource('fea-custom');
+        viewer.dataSources.add(source);
+      }
+      let PointEntity = source.entities.add({
+        name: 'fea-point',
+        position: Cesium.Cartesian3.fromDegrees(Number(114), Number(30)),
+        billboard: {
+          image: require('./assets/images/23.png'),
+          scale: 1,
+          width: 23,
+          height: 23,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          scaleByDistance: new Cesium.NearFarScalar(1000, 1, 1000000, 0.9)
+        },
+        properties: {
+          type: 'point'
         }
       });
-    },
-    loadSatellite() {
-      // 1 雷达位置计算
-      window.radarLng = -180;
-      window.radarLat = 0;
-      // 1.1 雷达的高度
-      var length = 400000.0;
-      // 1.2 地面位置(垂直地面)
-      var positionOnEllipsoid = Cesium.Cartesian3.fromDegrees(radarLng, radarLat);
-      // 1.3 中心位置
-      var centerOnEllipsoid = Cesium.Cartesian3.fromDegrees(radarLng, radarLat, length * 0.5);
-      // 1.4 顶部位置(卫星位置)
-      var topOnEllipsoid = Cesium.Cartesian3.fromDegrees(radarLng, radarLat, length);
-      // 1.5 矩阵计算
-      var modelMatrix = Cesium.Matrix4.multiplyByTranslation(
-        Cesium.Transforms.eastNorthUpToFixedFrame(positionOnEllipsoid),
-        new Cesium.Cartesian3(0.0, 0.0, length * 0.5),
-        new Cesium.Matrix4()
-      );
-      // 卫星
-      window.satellite = viewer.entities.add({
-        position: new Cesium.CallbackProperty((time, result) => {
-          return Cesium.Cartesian3.fromDegrees(radarLng, radarLat, length * 0.5);
-        }, false),
-        model: {
-          uri: 'data/glb/satellite.glb',
-          scale: 10000,
-          runAnimations: true,
-          clampAnimations: true,
-          color: Cesium.Color.fromAlpha(Cesium.Color.RED, parseFloat(1.0)),
-          colorBlendMode: Cesium.ColorBlendMode.MIX,
-          colorBlendAmount: 0.1
-        }
-      });
-      // 卫星轨道
-      const SatelliteLine = viewer.entities.add({
+      let LineEntity = source.entities.add({
+        name: 'fea-line',
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-            -180,
-            0,
-            length * 0.5,
-            -90,
-            0,
-            length * 0.5,
-            0,
-            0,
-            length * 0.5,
-            90,
-            0,
-            length * 0.5,
-            180,
-            0,
-            length * 0.5
-          ]),
+          positions: Cesium.Cartesian3.fromDegreesArray([110, 25, 116, 35]),
           width: 2,
-          material: new Cesium.PolylineOutlineMaterialProperty({
-            color: Cesium.Color.fromCssColorString('#00f804'),
-            outlineColor: Cesium.Color.fromCssColorString('#00f804'),
-            outlineWidth: 1
-          })
+          clampToGround: true,
+          material: new Cesium.Color.fromCssColorString('#ff0000').withAlpha(0.9)
+        },
+        properties: {
+          type: 'line'
         }
       });
-
-      // 4 创建雷达放射波
-      // 4.1 先创建Geometry
-      var cylinderGeometry = new Cesium.CylinderGeometry({
-        length: length,
-        topRadius: 0.0,
-        bottomRadius: length * 0.5,
-        // vertexFormat : Cesium.PerInstanceColorAppearance.VERTEX_FORMAT
-        vertexFormat: Cesium.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat
-      });
-      // 4.2 创建GeometryInstance
-      var redCone = new Cesium.GeometryInstance({
-        geometry: cylinderGeometry,
-        modelMatrix: modelMatrix
-      });
-      // 4.3 创建Primitive
-      var radar = scene.primitives.add(
-        new Cesium.Primitive({
-          geometryInstances: [redCone],
-          appearance: new Cesium.MaterialAppearance({
-            // 自定义纹理
-            material: new Cesium.Material({
-              fabric: {
-                type: 'VtxfShader1',
-                uniforms: {
-                  color: new Cesium.Color(0.2, 1.0, 0.0, 1.0),
-                  repeat: 30.0,
-                  offset: 0.0,
-                  thickness: 0.3
-                },
-                source: `
-                                uniform vec4 color;
-                                uniform float repeat;
-                                uniform float offset;
-                                uniform float thickness;
-
-                                czm_material czm_getMaterial(czm_materialInput materialInput)
-                                {
-                                    czm_material material = czm_getDefaultMaterial(materialInput);
-                                    float sp = 1.0/repeat;
-                                    vec2 st = materialInput.st;
-                                    float dis = distance(st, vec2(0.5));
-                                    float m = mod(dis + offset, sp);
-                                    float a = step(sp*(1.0-thickness), m);
-
-                                    material.diffuse = color.rgb;
-                                    material.alpha = a * color.a;
-
-                                    return material;
-                                }
-                            `
-              },
-              translucent: false
-            }),
-            faceForward: false, // 当绘制的三角面片法向不能朝向视点时，自动翻转法向，从而避免法向计算后发黑等问题
-            closed: true // 是否为封闭体，实际上执行的是是否进行背面裁剪
-          })
-        })
-      );
-
-      // 5 动态修改雷达材质中的offset变量，从而实现动态效果。
-      viewer.scene.preUpdate.addEventListener(() => {
-        var offset = radar.appearance.material.uniforms.offset;
-        offset -= 0.001;
-        if (offset > 1.0) {
-          offset = 0.0;
+      let PolygonEntity = source.entities.add({
+        name: 'fea-polygib',
+        polygon: {
+          hierarchy: new Cesium.PolygonHierarchy(
+            Cesium.Cartesian3.fromDegreesArray([90, 25, 100, 30, 100, 40, 80, 40])
+          ),
+          outline: true,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 4,
+          material: Cesium.Color.fromRandom({ alpha: 1.0 })
+        },
+        properties: {
+          type: 'polygon'
         }
-        radar.appearance.material.uniforms.offset = offset;
       });
-      window.radar = radar;
-      this.doRadarAnimate();
     },
-    doRadarAnimate() {
-      radarLng += 0.01;
-      const pos = Cesium.Cartesian3.fromDegrees(radarLng, radarLat);
-      const modelMatrix = Cesium.Matrix4.multiplyByTranslation(
-        Cesium.Transforms.eastNorthUpToFixedFrame(pos),
-        new Cesium.Cartesian3(0.0, 0.0, length * 0.5),
-        new Cesium.Matrix4()
-      );
-      radar.modelMatrix = modelMatrix;
-      requestAnimationFrame(this.doRadarAnimate);
+    // 注册鼠标点击事件
+    addLeftClickEvent() {
+      let handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      handler.setInputAction(evt => {
+        const pick = viewer.scene.pick(evt.position);
+        if (Cesium.defined(pick) && pick.id) {
+          const entity = pick.id;
+          if (entity.properties) {
+            this.entityHandle(entity);
+          }
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      handler.setInputAction(evt => {
+        const pick = viewer.scene.pick(evt.startPosition);
+        if (Cesium.defined(pick) && pick.id) {
+          document.body.style.cursor = 'pointer';
+        } else {
+          document.body.style.cursor = '';
+        }
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+      handler.setInputAction(evt => {
+        const pick = viewer.scene.pick(evt.position);
+        if (Cesium.defined(pick) && pick.id) {
+        }
+      }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+    },
+    entityHandle(entity) {
+      const properties = entity.properties.getValue();
+      console.log(properties);
     }
   }
 };
